@@ -1,42 +1,35 @@
-
 from prefect import flow, task
-from prefect.tasks import task_input_hash
-from prefect.exceptions import FailedTask
-from prefect.tasks import wait_for
 import pandas as pd
-import time
 
+# Task 1: Ingest with retry logic [cite: 16, 40]
 @task(retries=3, retry_delay_seconds=5)
-def ingest():
-    try:
-        data = pd.read_csv('shipments.csv')
-        return data
-    except Exception as e:
-        raise FailedTask(f"Failed to read CSV: {e}")
+def ingest_data():
+    return pd.read_csv("shipments.csv")
 
+# Task 2: Clean data (filling missing values with 0) [cite: 17, 31]
 @task
-def clean(data):
-    data['delivery_time'] = data['delivery_time'].fillna(0)
-    return data
+def clean_data(df):
+    df["delivery_time"] = df["delivery_time"].fillna(0)
+    return df
 
+# Task 3: Transform (calculate delivery metrics) [cite: 18, 31]
 @task
-def transform(data):
-    avg_delivery_time = data.groupby('destination')['delivery_time'].mean().reset_index()
-    return avg_delivery_time
+def transform_data(df):
+    # Grouping by destination and calculating mean delivery time [cite: 31]
+    return df.groupby("destination")["delivery_time"].mean().reset_index()
 
+# Task 4: Load processed output [cite: 19, 31]
 @task
-def load(data):
-    data.to_csv('output.csv', index=False)
+def load_data(df):
+    df.to_csv("output.csv", index=False)
 
-@flow
+# Define the Pipeline Flow [cite: 21, 31, 38]
+@flow(name="Logistics-Pipeline")
 def logistics_pipeline():
-    data = ingest()
-    cleaned_data = clean(data)
-    transformed_data = transform(cleaned_data)
-    load(transformed_data)
+    raw_data = ingest_data()
+    cleaned_data = clean_data(raw_data)
+    results = transform_data(cleaned_data)
+    load_data(results)
 
-logistics_pipeline.schedule(cron_expression="0 * * * * *", start_date="2024-01-01")
-
-
-
-logistics_pipeline()
+if __name__ == "__main__":
+    logistics_pipeline()
